@@ -17,20 +17,20 @@ clear all
 close all
 clc
 
-% Data:
+%% Data:
 
 % This program read the information from an Excel document (data.xlsx)
 % The user should order the sheets from the document and the data like this:
 
 % Sheet 1: Connectivity matrix (CON) (don't insert headers)
-%% Insert data in this order: |Element|Initial_Node|Final_Node|Symmetry_Group| 
-%%% Symmetry groups must be ordered from least to greatest
+%  Insert data in this order: |Element|Initial_Node|Final_Node|Symmetry_Group| 
+%   Symmetry groups must be ordered from least to greatest
 
 % Sheet 2: Coordinate matrix (COOR) (don't insert headers)
-%% Insert data in this order: |Node|x_Coordinates|y_Coordinates|y_Coordinates|
+%  Insert data in this order: |Node|x_Coordinates|y_Coordinates|y_Coordinates|
 
 % Sheet 3: Free nodes vector (NL) (don't insert headers)
-%% Insert data in the first column of this sheet
+%  Insert data in the first column of this sheet
 
 CON=xlsread('data.xlsx',1); % Connectivity matrix
 COOR=xlsread('data.xlsx',2); % Coordinates matrix
@@ -45,9 +45,9 @@ for i=1:size(Cs,1)
     Cs(i,max(CON(i,2:3)))=-1;
 end
 
-% Equilibrium matrix assembly:
+%% Equilibrium matrix assembly:
 
-%% Lenght of elements:
+% Lenght of elements:
 
 for i=1:size(CON,1)
     NI=CON(i,2); % Initial node of the element
@@ -61,18 +61,18 @@ for i=1:size(CON,1)
 end
 L=diag(L);
 
-%% Equilibrium matrix:
+% Equilibrium matrix:
 
 A=[(Cs'*diag(Cs*COOR(:,2))*inv(L))',(Cs'*diag(Cs*COOR(:,3))*inv(L))',(Cs'*diag(Cs*COOR(:,4))*inv(L))']';
 
-% Determination of independent prestressing modes:
+%% Determination of independent prestressing modes:
 
 r1=rank(A); % A matrix rank.
 s1=b-r1;
 [~,~,V]=svd(A); % Singular value decomposition of the equibrium matrix
 T=V(:,r1+1:b); % Independent prestressing modes:
 
-% Determination of integral prestressing modes:
+%% Determination of integral prestressing modes:
 
 [a,e]=size(T); % T matrix size
 n=max(CON(:,4)); % Number of symmetry groups 
@@ -80,7 +80,7 @@ E=zeros(a,n); % This matrix will have the -e vectors from the Yuan method
 i=1; 
 j=1; 
 
-%% Assembly of the -e vectors from the Yuan method:
+% Assembly of the -e vectors from the Yuan method:
 
 for k=1:n;      
     while (CON(j,4)-k)==0; 
@@ -101,8 +101,8 @@ s2=s1+n-r2; % Number of integral prestressing modes
 Tr=V2(:,r2+1:b2); 
 W1=E*Tr(size(T,2)+1:b2,:); % Integral prestressing mode
 
-%%% The next "for" orders the integral presstressing modes according to the 
-%%% symmetry group
+% The next "for" orders the integral presstressing modes according to the 
+% symmetry group
 
 for i=1:size(W1,1);
     if i==1
@@ -118,8 +118,8 @@ end
 h=find(W==0); % Empty spaces in W vector
 W(h)=[]; 
 
-%%% The next "if" calculates the prestressing relative distribution according to
-%%% the greater value
+% The next "if" calculates the prestressing relative distribution according to
+% the greater value
 
 if abs(min(W))>max(W)
     W=W/abs(min(W));
@@ -128,11 +128,11 @@ else
 end
 
 
-% Plot:
+%% Plot:
 
 b=size(CON,1); 
 
-%% Configuration of the plot boundaries:
+% Configuration of the plot boundaries:
 
 dx=(max(COOR(:,2))-min(COOR(:,2)))/10; 
 dy=(max(COOR(:,3))-min(COOR(:,3)))/10; 
@@ -144,7 +144,7 @@ ymax=max(COOR(:,3))+dy;
 zmin=min(COOR(:,4))-dz; 
 zmax=max(COOR(:,4))+dz; 
 
-%% Structure Plot
+% Structure Plot
 
 title('Prestressing Mode','fontsize',20,'linewidth',0.7) 
 text((xmax-0.5*dx),(ymax-3*dy),(zmax-3*dz),'Traction','color','b','backgroundcolor','w','linewidth',0.7);
