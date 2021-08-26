@@ -4,10 +4,7 @@
 % using the Doble Singular Value Decomposition (DSVD) method developed by 
 % X.F.Yuan and S.L.Dong (https://doi.org/10.1016/S0045-7949(03)00254-2)
 
-%	Undergraduate Thesis:
-%  Tensegrity as an Alternative Structural System Applied to Pedestrian Bridges
-%  University of Cuenca
-
+%	
 %	By: 
 %  Jaswant Cobos
 
@@ -19,7 +16,7 @@ clc
 
 %% Data:
 
-% This program read the information from an Excel document (data.xlsx)
+% This code read the information from an Excel document (data.xlsx)
 % The user should order the sheets from the document and the data like this:
 
 % Sheet 1: Connectivity matrix (CON) (don't insert headers)
