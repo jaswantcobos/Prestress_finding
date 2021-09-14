@@ -1,174 +1,376 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Code to determine the Integral Feasible Prestress of Tensegrity Structures
-% using the Doble Singular Value Decomposition (DSVD) method developed by 
-% X.F.Yuan and S.L.Dong (https://doi.org/10.1016/S0045-7949(03)00254-2)
+% Code to determine the Integral Feasible Prestress of Tensegrity 
+% Structures using the Doble Singular Value Decomposition (DSVD) method 
+% developed by: [Yuan, X., Chen, L., & Dong, S. (2007). Prestress design 
+% of cable domes with new forms. International Journal of Solids and 
+% Structures, 44(9), 2773-2782.]
+% (https://doi.org/10.1016/j.ijsolstr.2006.08.026)
 
-%	
-%	By: 
-%  Jaswant Cobos
+	
+% By: 
+%   Jaswant Cobos
+%   jaswant.cobos@gmail.com
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-clear all
-close all
+close
+clear 
 clc
 
-%% Data:
+%% DATA
 
-% This code read the information from an Excel document (data.xlsx)
-% The user should order the sheets from the document and the data like this:
+% This code read the information from an Excel document (DOC.xlsx)
+% The user should order the sheets from the document this way:
 
 % Sheet 1: Connectivity matrix (CON) (don't insert headers)
-%  Insert data in this order: |Element|Initial_Node|Final_Node|Symmetry_Group| 
-%   Symmetry groups must be ordered from least to greatest
+%      |Element|Initial_Node|Final_Node|Symmetry_Group|Bar_Cable|
+%   Symmetry_groups must be numbers
+%   The Bar_cable column should be filled with 0 if the member is a bar
+%   and with 1 when the member is a cable
 
 % Sheet 2: Coordinate matrix (COOR) (don't insert headers)
-%  Insert data in this order: |Node|x_Coordinates|y_Coordinates|y_Coordinates|
+%       |Node|x_Coordinates|y_Coordinates|y_Coordinates|
+%   Nodes must be numbers
 
-% Sheet 3: Free nodes vector (NL) (don't insert headers)
-%  Insert data in the first column of this sheet
+% Sheet 3: Free nodes vector (FN) (don't insert headers)
+%   Free nodes must be numbers
+%   Insert the number of the free nodes in the first column of this sheet
 
-CON=xlsread('data.xlsx',1); % Connectivity matrix
-COOR=xlsread('data.xlsx',2); % Coordinates matrix
-NL=xlsread('data.xlsx',3); % Free Nodes Vector
+CON = xlsread('GEIGER_DOME', 1); % Connectivity matrix
+COOR = xlsread('GEIGER_DOME', 2); % Coordinate matrix
+FN = xlsread('GEIGER_DOME', 3); % Fre nodes vector
+SN = 'GEIGER_DOME'; % Name of the structure
 
-b=size(CON,1); % Number of elements
-n=size(NL,1); % Number of free nodes
-Cs=zeros(b,n); % Conectivity Matrix
+% Tolerances for the matrix rank during the two 
+% Singular Value Decomposition 
+tol_1 = 0.00001; % Set the tolerance for the first SVD
+tol_2 = 0.0001; % Set the tolerance for the second SVD
 
-for i=1:size(Cs,1)
-    Cs(i,min(CON(i,2:3)))=1;
-    Cs(i,max(CON(i,2:3)))=-1;
-end
+% Graphical parameters
+addnodenumber = false; % true = add the node numbers to the final plot
+addfixednodes = true; % true = add the node fixed symbol in the final plot
 
-%% Equilibrium matrix assembly:
+%% PREVIOUS CALCULATIONS:
 
-% Lenght of elements:
+b = size(CON, 1); % Number of members
+CON = sortrows(CON, (4)); % Ordering by symmetry group
+sg = unique(CON(:,4),'stable');% Symmetry groups
+n = size(sg, 1); % Number of symmetry groups
+fn = size(FN, 1); % Number of free nodes
+SN = strrep(SN, '_', ' '); % Changing the name of the structure
 
-for i=1:size(CON,1)
-    NI=CON(i,2); % Initial node of the element
-    NF=CON(i,3); % Final node of the element
-    fNI = find( COOR(:,1)==NI); % Row position of the initial node
-    fNF = find( COOR(:,1)==NF); % Row position of the final node
-    CI=COOR(fNI,2:4); % X, Y, and Z initial node coordinates
-    CF=COOR(fNF,2:4); % X, Y, and Z final node coordinates
-    % Element Lenght:
-    L(i,1)=((CF(1)-CI(1))^2+(CF(2)-CI(2))^2+(CF(3)-CI(3))^2)^(1/2);
-end
-L=diag(L);
+%% GRAPH OF THE ELEMENTS
 
-% Equilibrium matrix:
+close
 
-A=[(Cs'*diag(Cs*COOR(:,2))*inv(L))',(Cs'*diag(Cs*COOR(:,3))*inv(L))',(Cs'*diag(Cs*COOR(:,4))*inv(L))']';
+% The next graph helps to visualize if all the memebers are connected
+% properly or if the node coordinates are well defined
 
-%% Determination of independent prestressing modes:
+% Settings for the graph:
 
-r1=rank(A); % A matrix rank.
-s1=b-r1;
-[~,~,V]=svd(A); % Singular value decomposition of the equibrium matrix
-T=V(:,r1+1:b); % Independent prestressing modes:
+%   dx, dy, and dz represent the 10% of the distance between the maximum
+%   and minimum coordinate for each axis
+dx = (max(COOR(:, 2)) - min(COOR(:, 2))) / 10;
+dy = (max(COOR(:, 3)) - min(COOR(:, 3))) / 10;
+dz = (max(COOR(:, 4)) - min(COOR(:, 4))) / 10;
 
-%% Determination of integral prestressing modes:
+%   x, y, and z max and min, are the maximun and minimum values for the
+%   graph window
+xmin = min(COOR(:, 2)) - dx;
+xmax = max(COOR(:, 2)) + dx;
 
-[a,e]=size(T); % T matrix size
-n=max(CON(:,4)); % Number of symmetry groups 
-E=zeros(a,n); % This matrix will have the -e vectors from the Yuan method 
-i=1; 
-j=1; 
+ymin = min(COOR(:, 3)) - dy;
+ymax = max(COOR(:, 3)) + dy;
 
-% Assembly of the -e vectors from the Yuan method:
+zmin = min(COOR(:, 4)) - dz;
+zmax = max(COOR(:, 4)) + dz;
 
-for k=1:n;      
-    while (CON(j,4)-k)==0; 
-     E(j,i)=-1; 
-     j=j+1; 
-     if j==a+1; 
-         j=1; 
-     end 
-    end 
-    i=i+1; 
-end
+%   Headers, labels, and legend
+title(SN,'fontsize', 16, 'linewidth', 0.7)
 
-X=[T E]; % X matrix from the Yuan method 
-[~,S,V2] = svd(X); % Second singular value decomposition 
-r2=rank(X); % X matrix rank.
-b2=size(X,2); % Number of column vectors of X matrix
-s2=s1+n-r2; % Number of integral prestressing modes
-Tr=V2(:,r2+1:b2); 
-W1=E*Tr(size(T,2)+1:b2,:); % Integral prestressing mode
+text(xmax, ymax + dy, (zmax / 2), ...
+    'CABLES', 'color', 'w', 'backgroundcolor', [190 190 190]/255, ...
+    'linewidth', 1);
+text(xmax, ymax, ((zmax / 2) + dz), ...
+    'BARS', 'color', 'w', 'backgroundcolor', 'k', 'linewidth', 1);
 
-% The next "for" orders the integral presstressing modes according to the 
-% symmetry group
+xlabel('X')
+ylabel('Y')
+zlabel('Z')
 
-for i=1:size(W1,1);
-    if i==1
-        W(i,1)=W1(i);
+% Plot of the members
+for i = 1:b
+    % Initial and final node coordinates for each element
+    x = [COOR(CON(i, 2), 2), COOR(CON(i, 3), 2)];
+    y = [COOR(CON(i, 2), 3), COOR(CON(i, 3), 3)];
+    z = [COOR(CON(i, 2), 4), COOR(CON(i, 3), 4)];
+    
+    hold on;
+    
+    if CON(i, 5) == 1
+        plot3(x, y, z, 'color', [190 190 190]/255, 'linewidth', 1);
     else
-        if W1(i)==W1(i-1) %<1.01&W1(i)/W1(i-1)>0.99
-            W(i,1)=0;
-        else
-            W(i,1)=W1(i);
-        end
+        plot3(x, y, z, 'k', 'linewidth', 1);
     end
 end
-h=find(W==0); % Empty spaces in W vector
-W(h)=[]; 
 
-% The next "if" calculates the prestressing relative distribution according to
-% the greater value
+% Number of the nodes
+text(COOR(:, 2), COOR(:, 3), COOR(:, 4), string(COOR(:, 1)));
 
-if abs(min(W))>max(W)
-    W=W/abs(min(W));
+axis equal;
+
+if sum(abs(COOR(:, 4))) == 0
+    axis([xmin xmax ymin ymax]) % Axis limits configuration
 else
-    W=W/max(W);
+    axis([xmin xmax ymin ymax zmin zmax]) % Axis limits configuration
+    view([xmax ymin zmax]) % Point of view configuration
 end
 
+set(gcf,'WindowState', 'maximized')
 
-%% Plot:
+%% CONNECTIVITY MATRIX ASSEMBLY
 
-b=size(CON,1); 
+% This matrix was assembled using the method of the chapter 2 of the
+% book "Tensegrity Structures Form, Stability, and Symmetry" written by
+% Jin Yao Zhang and Makoto Ohsaki
 
-% Configuration of the plot boundaries:
+% Connectivity matrix used to find the equilibrium matrix:
+Cs = zeros(b, size(COOR, 1));
+for i = 1:b
+    Cs(i, min(CON(i, 2:3))) = 1;
+    Cs(i, max(CON(i, 2:3))) = -1;
+end
 
-dx=(max(COOR(:,2))-min(COOR(:,2)))/10; 
-dy=(max(COOR(:,3))-min(COOR(:,3)))/10; 
-dz=(max(COOR(:,4))-min(COOR(:,4)))/10; 
-xmin=min(COOR(:,2))-dx; 
-xmax=max(COOR(:,2))+dx; 
-ymin=min(COOR(:,3))-dy; 
-ymax=max(COOR(:,3))+dy; 
-zmin=min(COOR(:,4))-dz; 
-zmax=max(COOR(:,4))+dz; 
+%% LENGTH OF THE ELEMENTS
 
-% Structure Plot
+% These matrices were assembled using the method of the chapter 2 of the
+% book "Tensegrity Structures Form, Stability, and Symmetry" written by
+% Jin Yao Zhang and Makoto Ohsaki
 
-title('Prestressing Mode','fontsize',20,'linewidth',0.7) 
-text((xmax-0.5*dx),(ymax-3*dy),(zmax-3*dz),'Traction','color','b','backgroundcolor','w','linewidth',0.7);
-text((xmax-0.5*dx),(ymax-5*dy),(zmax-5*dz),'Compression','color','r','backgroundcolor','w','linewidth',0.7);
-text((xmax-0.5*dx),(ymax-7*dy),(zmax-7*dz),'No stress','color','k','backgroundcolor','w','linewidth',0.7);
+u = Cs * COOR(:, 2); % X coordinate difference vector
+v = Cs * COOR(:, 3); % Y coordinate difference vector
+w = Cs * COOR(:, 4); % Z coordinate difference vector
 
-for i=1:b; 
-    x=[COOR(CON(i,2),2),COOR(CON(i,3),2)]; 
-    y=[COOR(CON(i,2),3),COOR(CON(i,3),3)]; 
-    z=[COOR(CON(i,2),4),COOR(CON(i,3),4)]; 
-    hold on; 
-    grid on; 
-    axis([xmin xmax ymin ymax zmin zmax]); 
-    if W(CON(i,4))<0.00001&&W(CON(i,4))>-0.00001; 
-        plot3(x,y,z,'k','linewidth',2); 
-    elseif W(CON(i,4))>0; 
-        g=round(abs(W(CON(i,4))*10)); % Line thickness proportional to 
-        if g==0;                      % the distribution value
-            g=0.5; 
-        end; 
-        plot3(x,y,z,'b','linewidth',g); 
-    elseif W(CON(i,4))<0 ; 
-        g=round(abs(W(CON(i,4))*10));  % Line thickness proportional to 
-        if g==0;                       % the distribution value
-            g=0.5; 
-        end; 
-        plot3(x,y,z,'r','linewidth',g); 
-    end 
+UU = diag(u); % Matrix with u as diagonal
+VV = diag(v); % Matrix with v as diagonal
+WW = diag(w); % Matrix with w as diagonal
+
+l = sqrt((UU * u) + (VV * v) + (WW * w)); % Length of the elements
+L = sqrt(UU ^ 2 + VV ^ 2 + WW ^ 2); % Matrix with l as diagonal
+
+%% EQUILIBRIUM MATRIX ASSEMBLY
+
+% This matrix was assembled using the method of the chapter 3 of the
+% book "Computational Modeling of Tensegrity Structures Art, Nature,
+% Mechanical and Biological Systems" written by Buntara Sthenly Gan
+
+% Equilibrium matrix calculation:
+Ab=[(Cs' * diag(Cs * COOR(:, 2) ./ l)); ... % Complete equilibrium matrix
+    (Cs' * diag(Cs * COOR(:, 3) ./ l)); ... % it includes free nodes and
+    (Cs' * diag(Cs * COOR(:, 4) ./ l))];    % fixed nodes              
+
+% Extraction of the equilibrium matrix for the free nodes
+Vefn = ismember(COOR(:,1),FN); % Vector for the extraction 1 DOF
+Mfixn = COOR(~Vefn, :); % Matrix of fixed nodes
+Vefn = [Vefn; Vefn; Vefn]; % Vector for the extraction 3 DOF
+
+A = Ab(Vefn, :); % Equilibrium matrix for the free nodes
+
+%% FIRST (SVD) SINGULAR VALUE DECOMPOSITION
+
+m = 3 * size(FN, 1); % Total number of infinitesimal mechanism
+r = rank(A, tol_1); % Rank of the equilibrium matrix
+[U, S, V] = svd (A); % SVD of the equilibrium matrix
+
+s = b - rank(A); % Number of independent self-stress modes
+k = m - rank(A); % Number of independent zero-energy deformation modes or
+                 % rigid body mechanisms
+
+if s == 0 && k == 0
+    disp('Statically determinate and kinematically determinate')
+    disp('Check the diag(S) and diag(S2) vectors to change the')
+    disp('tolerances of the rank in matrices A and T2 in %% DATA')
+elseif s ==0 && k > 0
+    disp('Statically determinate and kinematically indetermined')
+    disp('Check the diag(S) and diag(S2) vectors to change the')
+    disp('tolerances of the rank in matrices A and T2 in %% DATA')
+elseif s > 0 && k == 0
+    disp('Statically indeterminate and kinematically determined')
+elseif s > 0 && k > 0
+    disp('Statically indeterminate and kinematically indetermined')
 end 
+
+% Plot of the singular values for the first SVD
+close
+
+hold on
+
+% Importance of each singular value
+subplot(1,2,1)
+semilogy(diag(S), '-ok', 'linewidth', 0.1)
+
+title('Singular values - first SVD', 'fontsize', 16, 'linewidth', 0.7)
+
+xlabel('Singular Value (SV)')
+ylabel('log(SV)')
+
+% Cumulative energy for each singular value
+subplot(1,2,2)
+plot(cumsum(diag(S))/sum(diag(S)),'-ok', 'linewidth', 1)
+
+title('Cumulative Energy - first SVD', 'fontsize', 16, 'linewidth', 0.7)
+
+xlabel('Singular Value (SV)')
+ylabel('Cumulative Energy for the SV')
+
+set(gcf,'WindowState', 'maximized')
+
+% Independent self-stress mode
+T = V(:, ((r+1) : b)); 
+
+%% (DSVD) DOBLE SINGULAR VALUE DECOMPOSITION
+
+% The matrix "e" contains the base vector (ones) of member forces composed
+% of a unit stress in the ith group and zero in the other (n - 1) groups
+E = zeros(b, n);
+
+for i = 1:n
+    boc = CON(CON(:, 4) == sg(i), 5);
+    boc = boc(1);
+    
+    if boc == 0
+        bct = -1;
+    else
+        bct = 1;
+    end
+    E(CON(:, 4) == sg(i), i) = bct; % Matrix of the base vectors
+end
+
+% With the following equations:
+% (1) X = T1 * a1 + T2 * a2 + ... + Ts * as
+% (2) X = (x1 x1 x1 ... xi xi xi ... xn ... xn)'
+% If we do:
+% (1)-(2) => 
+% X - X = T1 * a1 + ... + Tn * an + (-e1 * x1) + ... + (-en * xn) = 0
+% T2 * a2 = 0
+
+% Then T2 can be expressed as follows:
+T2 = [T, -E];
+[U2, S2, V2] = svd(T2); % Second (SVD) singular value decomposition
+
+r2  = rank(T2, tol_2); % Rank of the matrix T2
+s2 = s + n - r2; % Number of integral prestress modes
+b2 = size(T2, 2); % Number of columns of T2
+
+% Plot of the singular values for the second SVD
+close
+
+hold on
+
+% Importance of each singular value
+subplot(1,2,1)
+semilogy(diag(S2), '-ok', 'linewidth', 0.1)
+
+title('Singular values - second SVD', 'fontsize', 16, 'linewidth', 0.7)
+
+xlabel('Singular Value (SV)')
+ylabel('log(SV)')
+
+% Cumulative energy for each singular value
+subplot(1,2,2)
+plot(cumsum(diag(S))/sum(diag(S)),'-ok', 'linewidth', 1)
+
+title('Cumulative Energy - second SVD', 'fontsize', 16, 'linewidth', 0.7)
+
+xlabel('Singular Value (SV)')
+ylabel('Cumulative Energy for the SV')
+
+set(gcf,'WindowState', 'maximized')
+
+% Prestress of members
+xs = V2((size(T, 2) + 1):b2, (r2 + 1):b2); 
+
+% Integral prestress mode
+X = E * xs;
+
+%% GRAPH OF THE STRUCTURE AND THE PRESTRESS OF ELEMENTS
+
+close
+
+%   Headers, labels, and legend
+CON(:, 6) = X/max(abs(X));
+
+title({SN, 'Integral Prestress Mode'},'fontsize', 16, 'linewidth', 0.7)
+
+text(xmax, ymax + dy, (zmax / 2), ...
+    'Traction', 'color', 'w', 'backgroundcolor', [190 190 190]/255, ...
+    'linewidth', 1);
+text(xmax, ymax, ((zmax / 2) + dz), ...
+    'Compression', 'color', 'w', 'backgroundcolor', 'k', 'linewidth', 1);
+
+xlabel('X')
+ylabel('Y')
+zlabel('Z')
+
+% Plot of the members
+t = abs(CON(:, 6)*5); % Line thicknesses
+for i = 1:b
+    % Initial and final node coordinates for each element
+    x = [COOR(CON(i, 2), 2), COOR(CON(i, 3), 2)];
+    y = [COOR(CON(i, 2), 3), COOR(CON(i, 3), 3)];
+    z = [COOR(CON(i, 2), 4), COOR(CON(i, 3), 4)];
+    
+    hold on;
+          
+    if CON(i, 6) < 0.00001 && CON(i, 6) > -0.00001 % Non prestressed member
+        plot3(x, y, z, 'r', 'linewidth', t(i));
+    elseif CON(i, 6) > 0 % Tractioned member
+        plot3(x, y, z, 'color', [190 190 190]/255, 'linewidth', t(i));
+    elseif CON(i, 6) < 0 % Compressioned member
+        plot3(x, y, z, 'k', 'linewidth', t(i));
+    end
+end
+
+set(gcf,'WindowState', 'maximized')
+
+% Fixed nodes
+if addfixednodes == true
+    plot3(Mfixn(:, 2), Mfixn(:, 3), Mfixn(:, 4), 'X', 'MarkerSize', dx,...
+      'MarkerEdgeColor','k', 'linewidth', 1);
+end
+
+% Number of the nodes
+if addnodenumber == true
+    text(COOR(:, 2), COOR(:, 3), COOR(:, 4), string(COOR(:, 1)));
+end
+
 axis equal;
+
+if sum(abs(COOR(:, 4))) == 0
+    axis([xmin xmax ymin ymax]) % Axis limits configuration
+else
+    axis([xmin xmax ymin ymax zmin zmax]) % Axis limits configuration
+    view([xmax ymin zmax]) % Point of view configuration
+end
+
+%% RESULTS FROM THE DSVD
+
+% Integral prestress mode with symmetry group
+Symmetry_group = sg;
+
+% Unique values of prestress for each symmetry groups
+Feasible_integral_prestress_mode = zeros(n, size(X,2));
+for i = 1:size(X, 2)
+    Feasible_integral_prestress_mode(:, i) = unique(X(:, i), 'stable');
+    
+    % Prestress normalized vector
+    Feasible_integral_prestress_mode(:, i) = ...
+    round(Feasible_integral_prestress_mode(:, i)/max(abs(...
+    Feasible_integral_prestress_mode(:, i))),3);
+end
+
+Result = table(Symmetry_group, Feasible_integral_prestress_mode);
+Result = sortrows(Result,1);
+
+disp(Result)
