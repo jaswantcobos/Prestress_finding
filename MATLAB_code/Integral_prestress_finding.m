@@ -1,21 +1,20 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Code to determine the Integral Feasible Prestress of Tensegrity 
-% Structures using the Doble Singular Value Decomposition (DSVD) method 
-% developed by: [Yuan, X., Chen, L., & Dong, S. (2007). Prestress design 
-% of cable domes with new forms. International Journal of Solids and 
+% Code to determine the Integral Feasible Prestress of Tensegrity
+% Structures using the Doble Singular Value Decomposition (DSVD) method
+% developed by: [Yuan, X., Chen, L., & Dong, S. (2007). Prestress design
+% of cable domes with new forms. International Journal of Solids and
 % Structures, 44(9), 2773-2782.]
 % (https://doi.org/10.1016/j.ijsolstr.2006.08.026)
 
-	
-% By: 
+% By:
 %   Jaswant Cobos
 %   jaswant.cobos@gmail.com
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-close
-clear 
+close all
+clear
 clc
 
 %% DATA
@@ -37,15 +36,16 @@ clc
 %   Free nodes must be numbers
 %   Insert the number of the free nodes in the first column of this sheet
 
-CON = xlsread('GEIGER_DOME', 1); % Connectivity matrix
-COOR = xlsread('GEIGER_DOME', 2); % Coordinate matrix
-FN = xlsread('GEIGER_DOME', 3); % Fre nodes vector
+CON = readmatrix('GEIGER_DOME', 'Sheet', 1); % Connectivity matrix
+COOR = readmatrix('GEIGER_DOME', 'Sheet', 2); % Coordinate matrix
+FN = readmatrix('GEIGER_DOME', 'Sheet',3); % Fre nodes vector
 SN = 'GEIGER_DOME'; % Name of the structure
 
-% Tolerances for the matrix rank during the two 
-% Singular Value Decomposition 
+% Tolerances for the matrix rank during the two
+% Singular Value Decomposition
 tol_1 = 0.00001; % Set the tolerance for the first SVD
 tol_2 = 0.0001; % Set the tolerance for the second SVD
+tol_3 = 0.01; % Set the tolerance for the prestress in each member
 
 % Graphical parameters
 addnodenumber = false; % true = add the node numbers to the final plot
@@ -53,21 +53,39 @@ addfixednodes = true; % true = add the node fixed symbol in the final plot
 
 %% PREVIOUS CALCULATIONS:
 
+% Number of elements in matrices and vectors
 b = size(CON, 1); % Number of members
-CON = sortrows(CON, (4)); % Ordering by symmetry group
+bars = sum(CON(:,5)==0); % Number of bars
+cables = sum(CON(:,5)==1); % Number of cables
 sg = unique(CON(:,4),'stable');% Symmetry groups
 n = size(sg, 1); % Number of symmetry groups
 fn = size(FN, 1); % Number of free nodes
+
+% Ordering data
 SN = strrep(SN, '_', ' '); % Changing the name of the structure
+CON = sortrows(CON, (4)); % Ordering by symmetry group
+
+% Vectors and matrices to extract data from the equilibrium matrix
+Vefn = ismember(COOR(:,1),FN); % Vector for the extraction (1 DOF)
+Mfixn = COOR(~Vefn, :); % Matrix of fixed nodes
+Vefn = [Vefn; Vefn; Vefn]; % Vector for the extraction (3 DOF)
+
 
 %% GRAPH OF THE ELEMENTS
-
-close
 
 % The next graph helps to visualize if all the memebers are connected
 % properly or if the node coordinates are well defined
 
 % Settings for the graph:
+close
+
+figure('Name','Connectivity of the structure','NumberTitle','off')
+
+hold on
+
+axis equal;
+
+set(gcf,'WindowState', 'maximized')
 
 %   dx, dy, and dz represent the 10% of the distance between the maximum
 %   and minimum coordinate for each axis
@@ -86,40 +104,6 @@ ymax = max(COOR(:, 3)) + dy;
 zmin = min(COOR(:, 4)) - dz;
 zmax = max(COOR(:, 4)) + dz;
 
-%   Headers, labels, and legend
-title(SN,'fontsize', 16, 'linewidth', 0.7)
-
-text(xmax, ymax + dy, (zmax / 2), ...
-    'CABLES', 'color', 'w', 'backgroundcolor', [190 190 190]/255, ...
-    'linewidth', 1);
-text(xmax, ymax, ((zmax / 2) + dz), ...
-    'BARS', 'color', 'w', 'backgroundcolor', 'k', 'linewidth', 1);
-
-xlabel('X')
-ylabel('Y')
-zlabel('Z')
-
-% Plot of the members
-for i = 1:b
-    % Initial and final node coordinates for each element
-    x = [COOR(CON(i, 2), 2), COOR(CON(i, 3), 2)];
-    y = [COOR(CON(i, 2), 3), COOR(CON(i, 3), 3)];
-    z = [COOR(CON(i, 2), 4), COOR(CON(i, 3), 4)];
-    
-    hold on;
-    
-    if CON(i, 5) == 1
-        plot3(x, y, z, 'color', [190 190 190]/255, 'linewidth', 1);
-    else
-        plot3(x, y, z, 'k', 'linewidth', 1);
-    end
-end
-
-% Number of the nodes
-text(COOR(:, 2), COOR(:, 3), COOR(:, 4), string(COOR(:, 1)));
-
-axis equal;
-
 if sum(abs(COOR(:, 4))) == 0
     axis([xmin xmax ymin ymax]) % Axis limits configuration
 else
@@ -127,7 +111,51 @@ else
     view([xmax ymin zmax]) % Point of view configuration
 end
 
-set(gcf,'WindowState', 'maximized')
+% The next code lines help to define the legend
+lfl = plot3([1000000 1000001], [1000000 1000001], [1000000 1000001]);
+set(lfl, 'color', [190 190 190]/255, 'linewidth', 2)
+lfl = plot3([1000000 1000001], [1000000 1000001], [1000000 1000001]);
+set(lfl, 'color', 'k', 'linewidth', 2)
+
+% Fixed nodes
+if addfixednodes == true
+    plot3(Mfixn(:, 2), Mfixn(:, 3), Mfixn(:, 4), 'X', 'MarkerSize', 10,...
+      'MarkerEdgeColor','k', 'linewidth', 1)
+end
+
+% Number of the nodes
+text(COOR(:, 2), COOR(:, 3), COOR(:, 4), string(COOR(:, 1)), ...
+     'fontsize', 8);
+
+% Plot of the members
+for i = 1:b
+    % Initial and final node coordinates for each element
+    x = [COOR(CON(i, 2), 2), COOR(CON(i, 3), 2)];
+    y = [COOR(CON(i, 2), 3), COOR(CON(i, 3), 3)];
+    z = [COOR(CON(i, 2), 4), COOR(CON(i, 3), 4)];
+        
+    condition1 = CON(i, 5) == 1; % Tractioned member
+    plots = plot3(x(condition1, :), y(condition1, :), z(condition1, :));
+    set(plots, 'color', [190 190 190]/255, 'linewidth', 1)
+
+    condition2 = CON(i, 5) == 0; % Compressioned member
+    plots = plot3(x(condition2, :), y(condition2, :), z(condition2, :));
+    set(plots, 'color', 'k', 'linewidth', 1)
+end
+
+% Headers, labels, and legend
+title(SN,'fontsize', 16, 'linewidth', 0.7)
+
+xlabel('X')
+ylabel('Y')
+zlabel('Z')
+
+if fn ~= size(COOR, 1)
+    legend({'Cables';'Bars';'Fixed Node'})
+else
+    legend({'Cables';'Bars'})
+end 
+
 
 %% CONNECTIVITY MATRIX ASSEMBLY
 
@@ -168,13 +196,9 @@ L = sqrt(UU ^ 2 + VV ^ 2 + WW ^ 2); % Matrix with l as diagonal
 % Equilibrium matrix calculation:
 Ab=[(Cs' * diag(Cs * COOR(:, 2) ./ l)); ... % Complete equilibrium matrix
     (Cs' * diag(Cs * COOR(:, 3) ./ l)); ... % it includes free nodes and
-    (Cs' * diag(Cs * COOR(:, 4) ./ l))];    % fixed nodes              
+    (Cs' * diag(Cs * COOR(:, 4) ./ l))];    % fixed nodes
 
 % Extraction of the equilibrium matrix for the free nodes
-Vefn = ismember(COOR(:,1),FN); % Vector for the extraction 1 DOF
-Mfixn = COOR(~Vefn, :); % Matrix of fixed nodes
-Vefn = [Vefn; Vefn; Vefn]; % Vector for the extraction 3 DOF
-
 A = Ab(Vefn, :); % Equilibrium matrix for the free nodes
 
 %% FIRST (SVD) SINGULAR VALUE DECOMPOSITION
@@ -202,27 +226,27 @@ elseif s > 0 && k > 0
 end 
 
 % Plot of the singular values for the first SVD
-close
+figure('Name', 'Importance for each SVD', 'NumberTitle', 'off')
 
 hold on
 
 % Importance of each singular value
-subplot(1,2,1)
+subplot(2,2,1)
 semilogy(diag(S), '-ok', 'linewidth', 0.1)
 
 title('Singular values - first SVD', 'fontsize', 16, 'linewidth', 0.7)
 
-xlabel('Singular Value (SV)')
-ylabel('log(SV)')
+xlabel('Singular value (SV)')
+ylabel('Log(SV)')
 
 % Cumulative energy for each singular value
-subplot(1,2,2)
+subplot(2,2,2)
 plot(cumsum(diag(S))/sum(diag(S)),'-ok', 'linewidth', 1)
 
-title('Cumulative Energy - first SVD', 'fontsize', 16, 'linewidth', 0.7)
+title('Cumulative energy - first SVD', 'fontsize', 16, 'linewidth', 0.7)
 
-xlabel('Singular Value (SV)')
-ylabel('Cumulative Energy for the SV')
+xlabel('Singular value (SV)')
+ylabel('Cumulative energy for the SV')
 
 set(gcf,'WindowState', 'maximized')
 
@@ -264,27 +288,24 @@ s2 = s + n - r2; % Number of integral prestress modes
 b2 = size(T2, 2); % Number of columns of T2
 
 % Plot of the singular values for the second SVD
-close
-
-hold on
 
 % Importance of each singular value
-subplot(1,2,1)
+subplot(2,2,3)
 semilogy(diag(S2), '-ok', 'linewidth', 0.1)
 
 title('Singular values - second SVD', 'fontsize', 16, 'linewidth', 0.7)
 
-xlabel('Singular Value (SV)')
-ylabel('log(SV)')
+xlabel('Singular value (SV)')
+ylabel('Log(SV)')
 
 % Cumulative energy for each singular value
-subplot(1,2,2)
-plot(cumsum(diag(S))/sum(diag(S)),'-ok', 'linewidth', 1)
+subplot(2,2,4)
+plot(cumsum(diag(S2))/sum(diag(S2)),'-ok', 'linewidth', 1)
 
-title('Cumulative Energy - second SVD', 'fontsize', 16, 'linewidth', 0.7)
+title('Cumulative energy - second SVD', 'fontsize', 16, 'linewidth', 0.7)
 
-xlabel('Singular Value (SV)')
-ylabel('Cumulative Energy for the SV')
+xlabel('Singular value (SV)')
+ylabel('Cumulative energy for the SV')
 
 set(gcf,'WindowState', 'maximized')
 
@@ -296,56 +317,19 @@ X = E * xs;
 
 %% GRAPH OF THE STRUCTURE AND THE PRESTRESS OF ELEMENTS
 
-close
-
-%   Headers, labels, and legend
-CON(:, 6) = X/max(abs(X));
-
-title({SN, 'Integral Prestress Mode'},'fontsize', 16, 'linewidth', 0.7)
-
-text(xmax, ymax + dy, (zmax / 2), ...
-    'Traction', 'color', 'w', 'backgroundcolor', [190 190 190]/255, ...
-    'linewidth', 1);
-text(xmax, ymax, ((zmax / 2) + dz), ...
-    'Compression', 'color', 'w', 'backgroundcolor', 'k', 'linewidth', 1);
-
-xlabel('X')
-ylabel('Y')
-zlabel('Z')
-
-% Plot of the members
+% The next graph shows the feasible integral prestress mode for each
+% symmetry group
+CON(:, 6) = X / max(abs(X));
 t = abs(CON(:, 6)*5); % Line thicknesses
-for i = 1:b
-    % Initial and final node coordinates for each element
-    x = [COOR(CON(i, 2), 2), COOR(CON(i, 3), 2)];
-    y = [COOR(CON(i, 2), 3), COOR(CON(i, 3), 3)];
-    z = [COOR(CON(i, 2), 4), COOR(CON(i, 3), 4)];
-    
-    hold on;
-          
-    if CON(i, 6) < 0.00001 && CON(i, 6) > -0.00001 % Non prestressed member
-        plot3(x, y, z, 'r', 'linewidth', t(i));
-    elseif CON(i, 6) > 0 % Tractioned member
-        plot3(x, y, z, 'color', [190 190 190]/255, 'linewidth', t(i));
-    elseif CON(i, 6) < 0 % Compressioned member
-        plot3(x, y, z, 'k', 'linewidth', t(i));
-    end
-end
 
-set(gcf,'WindowState', 'maximized')
+% Settings for the graph:
+figure('Name','Feasible integral pre-stress','NumberTitle','off')
 
-% Fixed nodes
-if addfixednodes == true
-    plot3(Mfixn(:, 2), Mfixn(:, 3), Mfixn(:, 4), 'X', 'MarkerSize', dx,...
-      'MarkerEdgeColor','k', 'linewidth', 1);
-end
-
-% Number of the nodes
-if addnodenumber == true
-    text(COOR(:, 2), COOR(:, 3), COOR(:, 4), string(COOR(:, 1)));
-end
+hold on
 
 axis equal;
+
+set(gcf,'WindowState', 'maximized')
 
 if sum(abs(COOR(:, 4))) == 0
     axis([xmin xmax ymin ymax]) % Axis limits configuration
@@ -353,6 +337,67 @@ else
     axis([xmin xmax ymin ymax zmin zmax]) % Axis limits configuration
     view([xmax ymin zmax]) % Point of view configuration
 end
+
+% The next code lines help to define the legend
+if any(abs(X / max(abs(X))) < tol_3)
+    lfl = plot3([1000000 1000001], [1000000 1000001], [1000000 1000001]);
+    set(lfl, 'color', 'r', 'linewidth', 2)
+end
+lfl = plot3([1000000 1000001], [1000000 1000001], [1000000 1000001]);
+set(lfl, 'color', [190 190 190]/255, 'linewidth', 2)
+lfl = plot3([1000000 1000001], [1000000 1000001], [1000000 1000001]);
+set(lfl, 'color', 'k', 'linewidth', 2)
+
+% Fixed nodes
+if addfixednodes == true
+    plot3(Mfixn(:, 2), Mfixn(:, 3), Mfixn(:, 4), 'X', 'MarkerSize', 10,...
+      'MarkerEdgeColor','k', 'linewidth', 1);
+end
+
+% Number of the nodes
+if addnodenumber == true
+    text(COOR(:, 2), COOR(:, 3), COOR(:, 4), string(COOR(:, 1)), ...
+         'fontsize', 8);
+end
+
+% Plot of the members
+for i = 1:b
+    % Initial and final node coordinates for each element
+    x = [COOR(CON(i, 2), 2), COOR(CON(i, 3), 2)];
+    y = [COOR(CON(i, 2), 3), COOR(CON(i, 3), 3)];
+    z = [COOR(CON(i, 2), 4), COOR(CON(i, 3), 4)];
+              
+    condition3 = abs(CON(i, 6)) < tol_3; % Tractioned member
+    plots = plot3(x(condition3, :), y(condition3, :), z(condition3, :));
+    set(plots, 'color', 'r', 'linewidth', t(i))
+    
+    condition4 = CON(i, 6) > tol_3; % Tractioned member
+    plots = plot3(x(condition4, :), y(condition4, :), z(condition4, :));
+    set(plots, 'color', [190 190 190]/255, 'linewidth', t(i))
+
+    condition5 = CON(i, 6) < -tol_3; % Compressioned member
+    plots = plot3(x(condition5, :), y(condition5, :), z(condition5, :));
+    set(plots, 'color', 'k', 'linewidth', t(i))
+end
+
+%   Headers, labels, and legend
+title({SN, 'Integral Prestress Mode'},'fontsize', 16, 'linewidth', 0.7)
+
+xlabel('X')
+ylabel('Y')
+zlabel('Z')
+
+if any(abs(X / max(abs(X))) < tol_3)
+    if fn ~= size(COOR, 1)
+        legend({'Non-prestressed';'Tractioned';'Compressed';'Fixed Node'})
+    else
+        legend({'Non-prestressed';'Tractioned';'Compressed'})
+    end
+elseif fn ~= size(COOR, 1)
+    legend({'Tractioned';'Compressed';'Fixed Node'})
+else
+    legend({'Tractioned';'Compressed'})
+end 
 
 %% RESULTS FROM THE DSVD
 
